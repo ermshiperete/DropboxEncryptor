@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DropboxEncryptor", "DropboxEncryptor\DropboxEncryptor.csproj", "{B34A0774-A723-427B-92D3-6D26DE79AE84}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DropboxEncryptorTests", "DropboxEncryptorTests\DropboxEncryptorTests.csproj", "{9FE36B27-D772-42EA-B721-E86608A2311B}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B34A0774-A723-427B-92D3-6D26DE79AE84}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B34A0774-A723-427B-92D3-6D26DE79AE84}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B34A0774-A723-427B-92D3-6D26DE79AE84}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B34A0774-A723-427B-92D3-6D26DE79AE84}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9FE36B27-D772-42EA-B721-E86608A2311B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9FE36B27-D772-42EA-B721-E86608A2311B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9FE36B27-D772-42EA-B721-E86608A2311B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9FE36B27-D772-42EA-B721-E86608A2311B}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
