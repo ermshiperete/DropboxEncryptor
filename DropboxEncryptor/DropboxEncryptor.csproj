@@ -1,7 +1,13 @@
-<Project Sdk="Microsoft.NET.Sdk">
-
-    <PropertyGroup>
-        <TargetFramework>netstandard2.0</TargetFramework>
-    </PropertyGroup>
-
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netcoreapp2.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <DefineDebug Condition="'$(Configuration)'=='Debug'">true</DefineDebug>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Ardalis.SmartEnum" Version="1.0.3" />
+    <PackageReference Include="CommandLineParser" Version="2.2.1" />
+    <PackageReference Include="ini-parser" Version="2.5.2" />
+    <PackageReference Include="Newtonsoft.Json" Version="11.0.2" />
+  </ItemGroup>
 </Project>

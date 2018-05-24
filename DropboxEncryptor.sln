@@ -4,6 +4,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DropboxEncryptor", "Dropbox
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DropboxEncryptorTests", "DropboxEncryptorTests\DropboxEncryptorTests.csproj", "{9FE36B27-D772-42EA-B721-E86608A2311B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestRunner", "TestRunner\TestRunner.csproj", "{DCB04B7A-0F3E-4539-BC89-8D2FFE6E3616}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -18,5 +20,9 @@ Global
 		{9FE36B27-D772-42EA-B721-E86608A2311B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{9FE36B27-D772-42EA-B721-E86608A2311B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{9FE36B27-D772-42EA-B721-E86608A2311B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DCB04B7A-0F3E-4539-BC89-8D2FFE6E3616}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DCB04B7A-0F3E-4539-BC89-8D2FFE6E3616}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DCB04B7A-0F3E-4539-BC89-8D2FFE6E3616}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DCB04B7A-0F3E-4539-BC89-8D2FFE6E3616}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
