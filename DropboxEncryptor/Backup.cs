@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.IO;
 
@@ -52,7 +52,7 @@ namespace DropboxEncryptor
 				{
 					case WatcherChangeTypes.Created:
 					case WatcherChangeTypes.Changed:
-						File.Copy(dataObject.FullPath, Configuration.Instance.BackupDir, true);
+						File.Copy(dataObject.FullPath, Path.Combine(Configuration.Instance.BackupDir, dataObject.Name), true);
 						RunCommand("git", $"add {dataObject.Name}");
 						break;
 					case WatcherChangeTypes.Deleted:

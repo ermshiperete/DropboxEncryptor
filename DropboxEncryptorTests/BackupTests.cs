@@ -1,7 +1,8 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.IO;
 using DropboxEncryptor;
 using NUnit.Framework;
+using SIL.IO;
 
 namespace DropboxEncryptorTests
 {
@@ -54,7 +55,7 @@ namespace DropboxEncryptorTests
 		[TearDown]
 		public void TearDown()
 		{
-			Directory.Delete(Path.GetDirectoryName(Configuration.Instance.BackupDir), true);
+			RobustIO.DeleteDirectory(Path.GetDirectoryName(Configuration.Instance.BackupDir), true);
 		}
 
 		[Test]
