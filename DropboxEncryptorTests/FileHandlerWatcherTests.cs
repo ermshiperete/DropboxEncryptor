@@ -1,10 +1,12 @@
-﻿
+
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Pipes;
 using System.Threading;
 using DropboxEncryptor;
 using NUnit.Framework;
+using SIL.IO;
 
 namespace DropboxEncryptorTests
 {
@@ -56,6 +58,8 @@ namespace DropboxEncryptorTests
 
 			private ServerForTesting()
 			{
+				Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: Creating ServerForTesting");
+				Debug.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: Creating ServerForTesting");
 				_threadFinishedEvent = new AutoResetEvent(false);
 				_serverReadyEvent = new AutoResetEvent(false);
 			}
@@ -63,6 +67,7 @@ namespace DropboxEncryptorTests
 			protected override void Dispose(bool disposing)
 			{
 				Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: Start of ServerForTesting.Dispose({disposing})");
+				Debug.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: Start of ServerForTesting.Dispose({disposing})");
 				base.Dispose(disposing);
 
 				if (disposing)
@@ -72,22 +77,35 @@ namespace DropboxEncryptorTests
 				}
 
 				Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: End of ServerForTesting.Dispose({disposing})");
+				Debug.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: End of ServerForTesting.Dispose({disposing})");
 			}
 
 			protected override void OnDisposing()
 			{
 				Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: Start of OnDisposing");
-				using (var namedPipe = new NamedPipeClientStream(NamedPipeName))
+				Debug.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: Start of OnDisposing");
+				try
 				{
-					namedPipe.Connect(100);
-					var streamString = new StreamHelper(namedPipe);
-					streamString.WriteString(Commands.Stop);
-					Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: Sent STOP command");
+					using (var namedPipe = new NamedPipeClientStream(NamedPipeName))
+					{
+						namedPipe.Connect(1000);
+						var streamString = new StreamHelper(namedPipe);
+						streamString.WriteString(Commands.Stop);
+						Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: Sent STOP command");
+						Debug.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: Sent STOP command");
+					}
+
+					Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: Starting to wait");
+					Debug.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: Starting to wait");
+					_threadFinishedEvent.WaitOne(10 * TestInterval);
+				}
+				catch (TimeoutException)
+				{
+					// just ignore
 				}
 
-				Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: Starting to wait");
-				_threadFinishedEvent.WaitOne(10 * TestInterval);
 				Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: End of OnDisposing");
+				Debug.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: End of OnDisposing");
 			}
 
 			protected override void OnSetupComplete()
@@ -110,9 +128,12 @@ namespace DropboxEncryptorTests
 			private void ServerLoop(object _)
 			{
 				Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}] start of ServerLoop");
+				Debug.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}] start of ServerLoop");
 				Console.WriteLine($"Creating pipe {NamedPipeName}");
+				Debug.WriteLine($"Creating pipe {NamedPipeName}");
 				Run();
 				Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}] End of ServerLoop");
+				Debug.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}] End of ServerLoop");
 			}
 
 			private void RunInternal()
@@ -123,7 +144,11 @@ namespace DropboxEncryptorTests
 
 			public void WaitUntilServerProcessedChange()
 			{
+				Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}] Start of WaitUntilServerProcessedChange");
+				Debug.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}] Start of WaitUntilServerProcessedChange");
 				_serverReadyEvent.WaitOne(TestInterval);
+				Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}] End of WaitUntilServerProcessedChange");
+				Debug.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}] End of WaitUntilServerProcessedChange");
 			}
 
 			public static ServerForTesting Create()
@@ -138,6 +163,7 @@ namespace DropboxEncryptorTests
 		public void SetupFixture()
 		{
 			Console.WriteLine("*** SetupFixture");
+			Debug.WriteLine("*** SetupFixture");
 			ConfigurationForTests.Create();
 		}
 
@@ -170,7 +196,7 @@ namespace DropboxEncryptorTests
 		[TearDown]
 		public void Teardown()
 		{
-			Directory.Delete(Path.GetDirectoryName(Configuration.Instance.EncryptedDir), true);
+			RobustIO.DeleteDirectory(Path.GetDirectoryName(Configuration.Instance.EncryptedDir), true);
 		}
 
 		[Test]
@@ -184,6 +210,7 @@ namespace DropboxEncryptorTests
 				WriteFile(encrypted, fileName);
 
 				server.WaitUntilServerProcessedChange();
+				Debug.WriteLine("****### Got WaitUntilServerProcessedChange");
 				Assert.That(File.Exists(FileName(Not(encrypted), fileName)), Is.True);
 			}
 		}

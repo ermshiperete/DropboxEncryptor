@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Pipes;
@@ -13,6 +13,7 @@ namespace DropboxEncryptor
 		protected NamedPipeServerStream _namedPipe;
 		protected FileWatcher _fileWatcher;
 		protected FileHandler _fileHandler;
+		private AutoResetEvent _commandEvent = new AutoResetEvent(false);
 
 		#region Disposable
 		~Server()
@@ -32,13 +33,16 @@ namespace DropboxEncryptor
 			{
 				OnDisposing();
 
+				_fileHandler?.Dispose();
 				_fileWatcher?.Dispose();
 				_namedPipe?.Dispose();
+				_commandEvent?.Dispose();
 			}
 
 			_namedPipe = null;
 			_fileWatcher = null;
 			_fileHandler = null;
+			_commandEvent = null;
 		}
 		#endregion
 
@@ -78,54 +82,53 @@ namespace DropboxEncryptor
 		{
 			Setup();
 
-			using (var commandEvent = new AutoResetEvent(false))
+			while (true)
 			{
-				while (true)
+				_namedPipe.BeginWaitForConnection(ar =>
 				{
-					_namedPipe.BeginWaitForConnection(ar =>
-					{
-						_namedPipe.EndWaitForConnection(ar);
-						commandEvent.Set();
-					}, null);
+					_namedPipe.EndWaitForConnection(ar);
+					_commandEvent.Set();
+				}, null);
 
-					WaitHandle.WaitAny(new WaitHandle[] { commandEvent });
+				WaitHandle.WaitAny(new WaitHandle[] {_commandEvent});
 
-					try
+				try
+				{
+					var streamHelper = new StreamHelper(_namedPipe);
+					var command = streamHelper.ReadString();
+					Debug.WriteLine($"Read command {command}");
+					Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: Read command {command}");
+					Debug.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: Read command {command}");
+					switch (command)
 					{
-						var streamHelper = new StreamHelper(_namedPipe);
-						var command = streamHelper.ReadString();
-						Debug.WriteLine($"Read command {command}");
-						Console.WriteLine(
-							$"*** [{Thread.CurrentThread.ManagedThreadId}]: Read command {command}");
-						switch (command)
-						{
-							case Commands.Stop:
-								_namedPipe.Disconnect();
-								Debug.WriteLine("Exiting");
-								OnAfterCommand(command);
-								return 0;
-							case Commands.Status:
-								streamHelper.WriteString("ok");
-								_namedPipe.Disconnect();
-								OnAfterCommand(command);
-								break;
-							case Commands.DecryptedFileChanged:
-							case Commands.EncryptedFileChanged:
-								var dataObject = streamHelper.ReadBinary<FileChangedDataObject>();
-								_fileHandler.HandleFileChange(Commands.FromName(command),
-									dataObject);
-								_namedPipe.Disconnect();
-								OnAfterCommand(command);
-								break;
-						}
+						case Commands.Stop:
+							_namedPipe.Disconnect();
+							Debug.WriteLine("Exiting");
+							OnAfterCommand(command);
+							return 0;
+						case Commands.Status:
+							streamHelper.WriteString("ok");
+							_namedPipe.Disconnect();
+							OnAfterCommand(command);
+							break;
+						case Commands.DecryptedFileChanged:
+						case Commands.EncryptedFileChanged:
+							var dataObject = streamHelper.ReadBinary<FileChangedDataObject>();
+							_fileHandler.HandleFileChange(Commands.FromName(command),
+								dataObject);
+							_namedPipe.Disconnect();
+							OnAfterCommand(command);
+							break;
 					}
-					catch (EndOfStreamException)
-					{
-						Console.WriteLine(
-							$"*** [{Thread.CurrentThread.ManagedThreadId}]: Reached EndOfStream - exiting");
-						OnAfterCommand(Commands.Stop);
-						return 0;
-					}
+				}
+				catch (EndOfStreamException)
+				{
+					Console.WriteLine(
+						$"*** [{Thread.CurrentThread.ManagedThreadId}]: Reached EndOfStream - exiting");
+					Debug.WriteLine(
+						$"*** [{Thread.CurrentThread.ManagedThreadId}]: Reached EndOfStream - exiting");
+					OnAfterCommand(Commands.Stop);
+					return 0;
 				}
 			}
 		}

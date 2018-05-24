@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -8,7 +8,7 @@ using Newtonsoft.Json;
 
 namespace DropboxEncryptor
 {
-	public sealed class FileHandler
+	public sealed class FileHandler: IDisposable
 	{
 		private class CryptFileInfo
 		{
@@ -89,6 +89,30 @@ namespace DropboxEncryptor
 
 		}
 
+		#region Disposable
+
+		~FileHandler()
+		{
+			Dispose(false);
+		}
+
+		public void Dispose()
+		{
+			Dispose(true);
+			GC.SuppressFinalize(this);
+		}
+
+		private void Dispose(bool disposing)
+		{
+			if (!disposing)
+				return;
+
+			if (!string.IsNullOrEmpty(_tmpDecryptedFile))
+				File.Delete(_tmpDecryptedFile);
+			_tmpDecryptedFile = null;
+		}
+		#endregion
+
 		private bool FileDeletedWhileOffline(IReadOnlyDictionary<string, CryptFileInfo> fileTree, string filePath)
 		{
 			var fileName = GetFileName(filePath);
@@ -119,16 +143,12 @@ namespace DropboxEncryptor
 			if (!filePath.EndsWith(FileBaseCryptor.EncodingExtension))
 				return File.OpenRead(filePath);
 
-			_tmpDecryptedFile = Path.GetTempFileName();
-			try
-			{
-				FileDecryptor.Instance.DecryptFile(filePath, _tmpDecryptedFile);
-				return File.OpenRead(_tmpDecryptedFile);
-			}
-			finally
-			{
+			if (!string.IsNullOrEmpty(_tmpDecryptedFile))
 				File.Delete(_tmpDecryptedFile);
-			}
+			_tmpDecryptedFile = Path.GetTempFileName();
+
+			FileDecryptor.Instance.DecryptFile(filePath, _tmpDecryptedFile);
+			return File.OpenRead(_tmpDecryptedFile);
 		}
 
 		private string CalculateHash(string filePath)
@@ -198,6 +218,7 @@ namespace DropboxEncryptor
 			}
 
 			Console.WriteLine($"*** [{System.Threading.Thread.CurrentThread.ManagedThreadId}]: Start of HandleEncryptedFileChange");
+			Debug.WriteLine($"*** [{System.Threading.Thread.CurrentThread.ManagedThreadId}]: Start of HandleEncryptedFileChange");
 			Debug.WriteLine($"Got EncryptedChanged ({dataObject.ChangeType}) for {dataObject.FullPath}");
 			Console.WriteLine($"Got EncryptedChanged ({dataObject.ChangeType}) for {dataObject.FullPath}");
 			// ReSharper disable once SwitchStatementMissingSomeCases
@@ -216,27 +237,8 @@ namespace DropboxEncryptor
 					break;
 			}
 			Console.WriteLine($"*** [{System.Threading.Thread.CurrentThread.ManagedThreadId}]: End of HandleEncryptedFileChange");
+			Debug.WriteLine($"*** [{System.Threading.Thread.CurrentThread.ManagedThreadId}]: End of HandleEncryptedFileChange");
 		}
-
-//		private void AddFileToQueue(FileSystemEventArgs e, Queue<FileSystemEventArgs> queue)
-//		{
-//			if (queue.Contains(e.FullPath))
-//				return;
-//
-//			var fileName = queue == _encryptedFileQueue
-//				? Path.GetFileNameWithoutExtension(e.FullPath)
-//				: Path.GetFileName(e.FullPath);
-//			var newFileInfo = new FileInfo(e.FullPath);
-//			if (!_fileTree.TryGetValue(fileName, out var oldFileInfo) ||
-//				newFileInfo.LastWriteTimeUtc > oldFileInfo.LastWriteTimeUtc)
-//			{
-//				Console.WriteLine($"{DateTime.Now}: Adding file {e.FullPath} to queue");
-//				queue.Enqueue(filePath);
-//			}
-//
-//			_fileTree[fileName] = (newFileInfo;
-//		}
-//
 
 		private void HandleDecryptedFileChange(FileChangedDataObject dataObject)
 		{
@@ -248,8 +250,10 @@ namespace DropboxEncryptor
 			}
 
 			Console.WriteLine($"*** [{System.Threading.Thread.CurrentThread.ManagedThreadId}]: Start of HandleDecryptedFileChange");
-			Debug.WriteLine($"Got DecryptedChanged ({dataObject.ChangeType}) for {dataObject.FullPath}");
+			Debug.WriteLine($"*** [{System.Threading.Thread.CurrentThread.ManagedThreadId}]: Start of HandleDecryptedFileChange");
+			//Debug.WriteLine($"Got DecryptedChanged ({dataObject.ChangeType}) for {dataObject.FullPath}");
 			Console.WriteLine($"*** [{System.Threading.Thread.CurrentThread.ManagedThreadId}]: Got DecryptedChanged ({dataObject.ChangeType}) for {dataObject.FullPath}");
+			Debug.WriteLine($"*** [{System.Threading.Thread.CurrentThread.ManagedThreadId}]: Got DecryptedChanged ({dataObject.ChangeType}) for {dataObject.FullPath}");
 			Backup.CreateBackup(dataObject);
 
 			// ReSharper disable once SwitchStatementMissingSomeCases
@@ -268,6 +272,7 @@ namespace DropboxEncryptor
 					break;
 			}
 			Console.WriteLine($"*** [{System.Threading.Thread.CurrentThread.ManagedThreadId}]: End of HandleDecryptedFileChange");
+			Debug.WriteLine($"*** [{System.Threading.Thread.CurrentThread.ManagedThreadId}]: End of HandleDecryptedFileChange");
 		}
 
 		private bool NeedProcessing(string filePath)

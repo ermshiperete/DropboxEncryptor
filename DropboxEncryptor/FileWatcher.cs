@@ -1,5 +1,6 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Pipes;
 using System.Threading;
@@ -10,9 +11,9 @@ namespace DropboxEncryptor
 	{
 		private readonly FileSystemWatcher _encryptedFileSystemWatcher;
 		private readonly FileSystemWatcher _decryptedFileSystemWatcher;
-		private readonly Queue<FileChangedDataObject> _queue;
 		private readonly AutoResetEvent _eventQueued;
 		private readonly AutoResetEvent _threadExited;
+		private Queue<FileChangedDataObject> _queue;
 
 		public FileWatcher()
 		{
@@ -46,10 +47,12 @@ namespace DropboxEncryptor
 			ThreadPool.QueueUserWorkItem(ProcessQueue);
 		}
 
-		public void EnableEvents()
+		public void EnableEvents(bool enable = true)
 		{
-			_encryptedFileSystemWatcher.EnableRaisingEvents = true;
-			_decryptedFileSystemWatcher.EnableRaisingEvents = true;
+			_encryptedFileSystemWatcher.EnableRaisingEvents = enable;
+			_decryptedFileSystemWatcher.EnableRaisingEvents = enable;
+			Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: EnableEvents({enable})");
+			Debug.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: EnableEvents({enable})");
 		}
 
 		#region Disposable
@@ -70,17 +73,25 @@ namespace DropboxEncryptor
 			if (!disposing)
 				return;
 
+			EnableEvents(false);
+
 			Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: Start of FileWatcher.Dispose(true)");
-			Enqueue(null);
-			_threadExited.WaitOne();
+			Debug.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: Start of FileWatcher.Dispose(true)");
+			if (_queue != null)
+			{
+				Enqueue(null);
+				_threadExited.WaitOne();
+			}
 
 			Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: continuing Dispose");
+			Debug.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: continuing Dispose");
 			_encryptedFileSystemWatcher.Dispose();
 			_decryptedFileSystemWatcher.Dispose();
 
 			_eventQueued.Dispose();
 			_threadExited.Dispose();
 			Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: End of FileWatcher.Dispose(true)");
+			Debug.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: End of FileWatcher.Dispose(true)");
 		}
 
 		#endregion
@@ -90,7 +101,10 @@ namespace DropboxEncryptor
 			// runs on background thread
 			while (true)
 			{
-				Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: ProcessQueue waiting for queue");
+				Console.WriteLine(
+					$"*** [{Thread.CurrentThread.ManagedThreadId}]: ProcessQueue waiting for queue");
+				Debug.WriteLine(
+					$"*** [{Thread.CurrentThread.ManagedThreadId}]: ProcessQueue waiting for queue");
 				_eventQueued.WaitOne();
 
 				FileChangedDataObject dataObject;
@@ -99,16 +113,27 @@ namespace DropboxEncryptor
 					dataObject = _queue.Dequeue();
 				}
 
-				Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: ProcessQueue: dequeued {dataObject}");
+				Console.WriteLine(
+					$"*** [{Thread.CurrentThread.ManagedThreadId}]: ProcessQueue: dequeued {dataObject}");
+				Debug.WriteLine(
+					$"*** [{Thread.CurrentThread.ManagedThreadId}]: ProcessQueue: dequeued {dataObject}");
 
-				if (dataObject == null)
+				if (dataObject != null && WriteChangeToPipe(dataObject))
+					continue;
+
+				Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: ProcessQueue exiting");
+				Debug.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: ProcessQueue exiting");
+				try
 				{
-					Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: ProcessQueue exiting");
 					_threadExited.Set();
-					return;
+				}
+				catch (ObjectDisposedException)
+				{
+					EnableEvents(false);
+					_queue = null;
 				}
 
-				WriteChangeToPipe(dataObject);
+				return;
 			}
 		}
 		private void OnEncryptedChanged(object sender, FileSystemEventArgs e)
@@ -130,38 +155,35 @@ namespace DropboxEncryptor
 			}
 		}
 
-//		private static void WriteChangeToPipeOld(Commands direction, FileSystemEventArgs e)
-//		{
-//			Console.WriteLine($"*** [{System.Threading.Thread.CurrentThread.ManagedThreadId}]: Start of FileWatch.erWriteChangeToPipe");
-//			Console.WriteLine(
-//				$"*** [{System.Threading.Thread.CurrentThread.ManagedThreadId}]: Got change {e.ChangeType} for {e.FullPath}, direction {direction}");
-//			using (var namedPipe = new NamedPipeClientStream(Server.NamedPipeName))
-//			{
-//				namedPipe.Connect();
-//
-//				var streamHelper = new StreamHelper(namedPipe);
-//				streamHelper.WriteString(direction.Name);
-//
-//				var dataObject = new FileChangedDataObject(direction, e);
-//				streamHelper.WriteBinary(dataObject);
-//			}
-//			Console.WriteLine($"*** [{System.Threading.Thread.CurrentThread.ManagedThreadId}]: End of FileWatch.erWriteChangeToPipe");
-//		}
-
-		private static void WriteChangeToPipe(FileChangedDataObject dataObject)
+		private static bool WriteChangeToPipe(FileChangedDataObject dataObject)
 		{
 			Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: Start of FileWatch.erWriteChangeToPipe");
+			Debug.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: Start of FileWatch.erWriteChangeToPipe");
 			Console.WriteLine(
+				$"*** [{Thread.CurrentThread.ManagedThreadId}]: Got change {dataObject.ChangeType} for {dataObject.FullPath}, direction {dataObject.Command}");
+			Debug.WriteLine(
 				$"*** [{Thread.CurrentThread.ManagedThreadId}]: Got change {dataObject.ChangeType} for {dataObject.FullPath}, direction {dataObject.Command}");
 			using (var namedPipe = new NamedPipeClientStream(Server.NamedPipeName))
 			{
-				namedPipe.Connect();
+				try
+				{
+					namedPipe.Connect(100);
+				}
+				catch (TimeoutException)
+				{
+					// We got a timeout which means that the server probably already shut down
+					Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: Timeout - End of FileWatch.erWriteChangeToPipe");
+					Debug.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: Timeout - End of FileWatch.erWriteChangeToPipe");
+					return false;
+				}
 
 				var streamHelper = new StreamHelper(namedPipe);
 				streamHelper.WriteString(dataObject.Command);
 				streamHelper.WriteBinary(dataObject);
 			}
 			Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: End of FileWatch.erWriteChangeToPipe");
+			Debug.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: End of FileWatch.erWriteChangeToPipe");
+			return true;
 		}
 
 	}

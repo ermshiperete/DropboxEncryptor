@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.Serialization.Formatters.Binary;
@@ -27,10 +27,12 @@ namespace DropboxEncryptor
 				if (len < 0)
 				{
 					Console.WriteLine("End of pipe stream!");
+					Debug.WriteLine("End of pipe stream!");
 					throw new EndOfStreamException();
 				}
 
 				Console.WriteLine($"Trying to read 2 + {len} bytes from named pipe");
+				Debug.WriteLine($"Trying to read 2 + {len} bytes from named pipe");
 				var inBuffer = new byte[len];
 				len = _ioStream.Read(inBuffer, 0, len);
 				//Console.WriteLine($"Actually read {len} bytes from named pipe");
@@ -39,6 +41,7 @@ namespace DropboxEncryptor
 			catch (OverflowException e)
 			{
 				Console.WriteLine($"Got OverflowException; Trying to create buffer of {len} bytes");
+				Debug.WriteLine($"Got OverflowException; Trying to create buffer of {len} bytes");
 				return new byte[1];
 			}
 		}
@@ -48,6 +51,7 @@ namespace DropboxEncryptor
 			var inBuffer = ReadBytes(out _);
 			var str = _streamEncoding.GetString(inBuffer);
 			Console.WriteLine($"*** [{System.Threading.Thread.CurrentThread.ManagedThreadId}]: Read {str} from pipe");
+			Debug.WriteLine($"*** [{System.Threading.Thread.CurrentThread.ManagedThreadId}]: Read {str} from pipe");
 			return str;
 		}
 
@@ -85,6 +89,7 @@ namespace DropboxEncryptor
 		public int WriteString(string outString)
 		{
 			Console.WriteLine($"*** [{System.Threading.Thread.CurrentThread.ManagedThreadId}]: Wrote {outString} to pipe");
+			Debug.WriteLine($"*** [{System.Threading.Thread.CurrentThread.ManagedThreadId}]: Wrote {outString} to pipe");
 			var outBuffer = _streamEncoding.GetBytes(outString);
 			return WriteBytes(outBuffer);
 		}
