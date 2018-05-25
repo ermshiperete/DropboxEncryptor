@@ -39,7 +39,7 @@ namespace DropboxEncryptor
 				return 0;
 			}
 
-			using (var server = new Server())
+			using (var server = Server.Create())
 			{
 				return server.Run();
 			}

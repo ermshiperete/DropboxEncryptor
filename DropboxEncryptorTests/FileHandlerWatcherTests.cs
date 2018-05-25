@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Pipes;
 using System.Threading;
+using System.Threading.Tasks;
 using DropboxEncryptor;
 using NUnit.Framework;
 using SIL.IO;
@@ -53,14 +54,13 @@ namespace DropboxEncryptorTests
 
 		private class ServerForTesting : Server
 		{
-			private readonly AutoResetEvent _threadFinishedEvent;
 			private readonly AutoResetEvent _serverReadyEvent;
+			private Task _serverLoop;
 
 			private ServerForTesting()
 			{
 				Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: Creating ServerForTesting");
 				Debug.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: Creating ServerForTesting");
-				_threadFinishedEvent = new AutoResetEvent(false);
 				_serverReadyEvent = new AutoResetEvent(false);
 			}
 
@@ -68,11 +68,11 @@ namespace DropboxEncryptorTests
 			{
 				Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: Start of ServerForTesting.Dispose({disposing})");
 				Debug.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: Start of ServerForTesting.Dispose({disposing})");
+
 				base.Dispose(disposing);
 
 				if (disposing)
 				{
-					_threadFinishedEvent.Dispose();
 					_serverReadyEvent.Dispose();
 				}
 
@@ -84,25 +84,11 @@ namespace DropboxEncryptorTests
 			{
 				Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: Start of OnDisposing");
 				Debug.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: Start of OnDisposing");
-				try
-				{
-					using (var namedPipe = new NamedPipeClientStream(NamedPipeName))
-					{
-						namedPipe.Connect(1000);
-						var streamString = new StreamHelper(namedPipe);
-						streamString.WriteString(Commands.Stop);
-						Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: Sent STOP command");
-						Debug.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: Sent STOP command");
-					}
+				StopServer();
 
-					Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: Starting to wait");
-					Debug.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: Starting to wait");
-					_threadFinishedEvent.WaitOne(10 * TestInterval);
-				}
-				catch (TimeoutException)
-				{
-					// just ignore
-				}
+				Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: Starting to wait");
+				Debug.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: Starting to wait");
+				_serverLoop.Wait(10 * TestInterval);
 
 				Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: End of OnDisposing");
 				Debug.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: End of OnDisposing");
@@ -115,17 +101,11 @@ namespace DropboxEncryptorTests
 
 			protected override void OnAfterCommand(string command)
 			{
-				if (command == Commands.Stop)
-				{
-					_threadFinishedEvent.Set();
-				}
-				else
-				{
+				if (command != Commands.Stop && Queue.Count <= 0)
 					_serverReadyEvent.Set();
-				}
 			}
 
-			private void ServerLoop(object _)
+			private void ServerLoop()
 			{
 				Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}] start of ServerLoop");
 				Debug.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}] start of ServerLoop");
@@ -138,7 +118,7 @@ namespace DropboxEncryptorTests
 
 			private void RunInternal()
 			{
-				ThreadPool.QueueUserWorkItem(ServerLoop);
+				_serverLoop = Task.Run(() => ServerLoop());
 				_serverReadyEvent.WaitOne(TestInterval);
 			}
 
