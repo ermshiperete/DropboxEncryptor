@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO.Pipes;
 using CommandLine;
+using DropboxEncryptor.Utils;
 
 namespace DropboxEncryptor
 {

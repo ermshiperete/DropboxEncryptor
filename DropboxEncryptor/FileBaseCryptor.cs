@@ -1,6 +1,7 @@
-﻿using System.IO;
+using System.IO;
 using System.Security;
 using System.Security.Cryptography;
+using DropboxEncryptor.Interfaces;
 
 namespace DropboxEncryptor
 {

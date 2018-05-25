@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using DropboxEncryptor;
 using NUnit.Framework;
 
@@ -56,9 +56,13 @@ namespace DropboxEncryptorTests
 			_encrypted = Path.GetTempFileName();
 			_decrypted = Path.GetTempFileName();
 			File.WriteAllText(_decryptedSource, text);
+			var sourceInfo = new FileInfo(_decryptedSource);
 
 			FileEncryptor.Instance.EncryptFile(_decryptedSource, _encrypted);
+			Assert.That(new FileInfo(_encrypted).LastWriteTimeUtc, Is.EqualTo(sourceInfo.LastWriteTimeUtc));
+
 			FileDecryptor.Instance.DecryptFile(_encrypted, _decrypted);
+			Assert.That(new FileInfo(_decrypted).LastWriteTimeUtc, Is.EqualTo(sourceInfo.LastWriteTimeUtc));
 
 			Assert.That(File.ReadAllText(_decrypted), Is.EqualTo(text));
 		}

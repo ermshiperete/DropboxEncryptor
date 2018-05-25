@@ -9,11 +9,13 @@ namespace DropboxEncryptor
 {
 	public sealed class FileWatcher: IDisposable
 	{
+		private readonly FileState _fileState;
 		private readonly FileSystemWatcher _encryptedFileSystemWatcher;
 		private readonly FileSystemWatcher _decryptedFileSystemWatcher;
 
-		public FileWatcher()
+		public FileWatcher(FileState fileState)
 		{
+			_fileState = fileState;
 			_encryptedFileSystemWatcher =
 				new FileSystemWatcher(Configuration.Instance.EncryptedDir) {
 					IncludeSubdirectories = false,
@@ -81,12 +83,36 @@ namespace DropboxEncryptor
 
 		private void OnEncryptedChanged(object sender, FileSystemEventArgs e)
 		{
-			Enqueue(new FileChangedDataObject(Commands.EncryptedFileChangedCmd, e));
+			Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: OnEncryptedChanged for {e.FullPath}");
+			Debug.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: OnEncryptedChanged for {e.FullPath}");
+			if (!FileState.IsSpecialFile(e.FullPath) && NeedProcessing(e, true))
+				Enqueue(new FileChangedDataObject(Commands.EncryptedFileChangedCmd, e));
+			else
+			{
+				Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: skipping {e.FullPath}");
+				Debug.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: skipping {e.FullPath}");
+			}
 		}
 
 		private void OnDecryptedChanged(object sender, FileSystemEventArgs e)
 		{
-			Enqueue(new FileChangedDataObject(Commands.DecryptedFileChangedCmd, e));
+			Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: OnDecryptedChanged for {e.FullPath}");
+			Debug.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: OnDecryptedChanged for {e.FullPath}");
+			if (!FileState.IsSpecialFile(e.FullPath) && NeedProcessing(e, false))
+				Enqueue(new FileChangedDataObject(Commands.DecryptedFileChangedCmd, e));
+			else
+			{
+				Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: skipping {e.FullPath}");
+				Debug.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: skipping {e.FullPath}");
+			}
+		}
+
+		private bool NeedProcessing(FileSystemEventArgs e, bool fileIsEncrypted)
+		{
+			if (e.ChangeType == WatcherChangeTypes.Deleted || e.ChangeType == WatcherChangeTypes.Renamed)
+				return true;
+
+			return _fileState.NeedProcessing(e.FullPath, fileIsEncrypted);
 		}
 
 		private void Enqueue(FileChangedDataObject dataObject)

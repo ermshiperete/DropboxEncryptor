@@ -1,5 +1,7 @@
-﻿using System.IO;
+using System;
+using System.IO;
 using System.Security.Cryptography;
+using DropboxEncryptor.Utils;
 
 namespace DropboxEncryptor
 {
@@ -47,8 +49,10 @@ namespace DropboxEncryptor
 						}
 					}
 				}
-
 			}
+
+			RetryIfLocked.Do(() => File.SetLastWriteTimeUtc(decryptedFilePath,
+				new FileInfo(encryptedFilePath).LastWriteTimeUtc), TimeSpan.FromSeconds(1), 10);
 		}
 	}
 }

@@ -10,35 +10,18 @@ namespace DropboxEncryptor
 {
 	public sealed class FileHandler: IDisposable
 	{
-		private class CryptFileInfo
-		{
-			// ReSharper disable once UnusedMember.Local
-			public CryptFileInfo()
-			{
-			}
-
-			public CryptFileInfo(FileSystemInfo fileInfo)
-			{
-				Name = fileInfo.Name;
-				LastWriteTimeUtc = fileInfo.LastWriteTimeUtc;
-			}
-
-			private string Name { get; }
-			public DateTime LastWriteTimeUtc { get; }
-		}
-
-		private readonly Dictionary<string, CryptFileInfo> _fileTree;
+		private FileState _fileState;
 		private SHA1 _hashProvider;
 		private string _tmpDecryptedFile;
 
-		public FileHandler()
+		public FileHandler(FileState fileState)
 		{
-			_fileTree = new Dictionary<string, CryptFileInfo>();
-			var oldFileTree = LoadFileTree();
+			_fileState = fileState;
+			var oldFileTree = _fileState.FileTree;
 
 			foreach (var file in Directory.EnumerateFiles(Configuration.Instance.EncryptedDir))
 			{
-				if (IsSpecialFile(file))
+				if (FileState.IsSpecialFile(file))
 					continue;
 
 				if (FileDeletedWhileOffline(oldFileTree, file))
@@ -68,7 +51,7 @@ namespace DropboxEncryptor
 
 			foreach (var file in Directory.EnumerateFiles(Configuration.Instance.DecryptedDir))
 			{
-				if (IsSpecialFile(file))
+				if (FileState.IsSpecialFile(file))
 					continue;
 
 				var encrypedFilePath = FileEncryptor.GetEncryptedFilePath(file);
@@ -119,23 +102,6 @@ namespace DropboxEncryptor
 			return fileTree.TryGetValue(fileName, out _);
 		}
 
-		private void SaveFileTree()
-		{
-			var output = JsonConvert.SerializeObject(_fileTree);
-			File.WriteAllText(StateFileName, output);
-		}
-
-		private static Dictionary<string, CryptFileInfo> LoadFileTree()
-		{
-			if (!File.Exists(StateFileName))
-				return new Dictionary<string, CryptFileInfo>();
-
-			var input = File.ReadAllText(StateFileName);
-			return JsonConvert.DeserializeObject<Dictionary<string, CryptFileInfo>>(input);
-		}
-
-		private static string StateFileName => Path.Combine(Configuration.Instance.DecryptedDir, ".state.config");
-
 		private SHA1 HashProvider => _hashProvider ?? (_hashProvider = SHA1.Create());
 
 		private FileStream GetFileStream(string filePath)
@@ -184,7 +150,7 @@ namespace DropboxEncryptor
 			return comparer.Compare(CalculateHash(filePath), CalculateHash(otherFilePath)) != 0;
 		}
 
-		private static string GetFileName(string filePath)
+		public static string GetFileName(string filePath)
 		{
 			var fileName = filePath.EndsWith(FileBaseCryptor.EncodingExtension)
 				? Path.GetFileNameWithoutExtension(filePath)
@@ -210,7 +176,7 @@ namespace DropboxEncryptor
 
 		private void HandleEncryptedFileChange(FileChangedDataObject dataObject)
 		{
-			if (IsSpecialFile(dataObject.FullPath))
+			if (FileState.IsSpecialFile(dataObject.FullPath))
 			{
 				Debug.WriteLine(
 					$"*** [{System.Threading.Thread.CurrentThread.ManagedThreadId}]: Got EncryptedChanged ({dataObject.ChangeType}) for special file {dataObject.FullPath} - ignoring");
@@ -242,7 +208,7 @@ namespace DropboxEncryptor
 
 		private void HandleDecryptedFileChange(FileChangedDataObject dataObject)
 		{
-			if (IsSpecialFile(dataObject.FullPath))
+			if (FileState.IsSpecialFile(dataObject.FullPath))
 			{
 				Debug.WriteLine(
 					$"Got DecryptedChanged ({dataObject.ChangeType}) for special file {dataObject.FullPath} - ignoring");
@@ -275,25 +241,6 @@ namespace DropboxEncryptor
 			Debug.WriteLine($"*** [{System.Threading.Thread.CurrentThread.ManagedThreadId}]: End of HandleDecryptedFileChange");
 		}
 
-		private bool NeedProcessing(string filePath)
-		{
-			var fileName = GetFileName(filePath);
-			var newFileInfo = new FileInfo(filePath);
-			return !_fileTree.TryGetValue(fileName, out var oldFileInfo) ||
-				newFileInfo.LastWriteTimeUtc > oldFileInfo.LastWriteTimeUtc;
-		}
-
-		private static bool IsSpecialFile(string filePath)
-		{
-			return Path.GetFileName(filePath) == KeyProvider.KeyFileName || filePath == StateFileName;
-		}
-
-		private void AddFileToTree(string filePath)
-		{
-			_fileTree[GetFileName(filePath)] = new CryptFileInfo(new FileInfo(filePath));
-			SaveFileTree();
-		}
-
 		private static bool IsFileLocked(string filePath)
 		{
 			FileStream stream = null;
@@ -319,7 +266,7 @@ namespace DropboxEncryptor
 
 		private void EncryptFile(string decryptedFilePath, string encryptedFilePath = null)
 		{
-			if (!NeedProcessing(decryptedFilePath) || IsSpecialFile(decryptedFilePath))
+			if (!_fileState.NeedProcessing(decryptedFilePath, false) || FileState.IsSpecialFile(decryptedFilePath))
 				return;
 
 			if (IsFileLocked(decryptedFilePath))
@@ -333,12 +280,12 @@ namespace DropboxEncryptor
 				var newDecryptedFilePath = FileDecryptor.GetDecryptedFilePath(encryptedFilePath);
 				File.Move(decryptedFilePath, newDecryptedFilePath);
 				FileEncryptor.Instance.EncryptFile(decryptedFilePath, encryptedFilePath);
-				AddFileToTree(newDecryptedFilePath);
+				_fileState.AddFileToTree(newDecryptedFilePath);
 			}
 			else
 			{
 				FileEncryptor.Instance.EncryptFile(decryptedFilePath);
-				AddFileToTree(decryptedFilePath);
+				_fileState.AddFileToTree(decryptedFilePath);
 			}
 		}
 
@@ -347,12 +294,12 @@ namespace DropboxEncryptor
 			var dest = Path.Combine(Configuration.Instance.EncryptedDir,
 				Path.GetFileName(decryptedFile) + FileBaseCryptor.EncodingExtension);
 			File.Delete(dest);
-			_fileTree.Remove(GetFileName(decryptedFile));
+			_fileState.RemoveFileFromTree(decryptedFile);
 		}
 
 		private void DecryptFile(string encryptedFilePath, string decryptedFilePath = null)
 		{
-			if (!NeedProcessing(encryptedFilePath) || IsSpecialFile(encryptedFilePath))
+			if (!_fileState.NeedProcessing(encryptedFilePath, true) || FileState.IsSpecialFile(encryptedFilePath))
 				return;
 
 			if (IsFileLocked(encryptedFilePath))
@@ -366,12 +313,12 @@ namespace DropboxEncryptor
 				var newEncryptedFilePath = FileEncryptor.GetEncryptedFilePath(decryptedFilePath);
 				File.Move(encryptedFilePath, newEncryptedFilePath);
 				FileDecryptor.Instance.DecryptFile(newEncryptedFilePath, decryptedFilePath);
-				AddFileToTree(decryptedFilePath);
+				_fileState.AddFileToTree(decryptedFilePath);
 			}
 			else
 			{
 				FileDecryptor.Instance.DecryptFile(encryptedFilePath);
-				AddFileToTree(encryptedFilePath);
+				_fileState.AddFileToTree(encryptedFilePath);
 			}
 		}
 
@@ -380,7 +327,7 @@ namespace DropboxEncryptor
 			var dest = Path.Combine(Configuration.Instance.DecryptedDir,
 				Path.GetFileNameWithoutExtension(encryptedFile));
 			File.Delete(dest);
-			_fileTree.Remove(GetFileName(encryptedFile));
+			_fileState.RemoveFileFromTree(GetFileName(encryptedFile));
 		}
 	}
 }

@@ -5,6 +5,8 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Pipes;
 using System.Threading;
+using System.Threading.Tasks;
+using DropboxEncryptor.Utils;
 
 namespace DropboxEncryptor
 {
@@ -17,7 +19,6 @@ namespace DropboxEncryptor
 		private NamedPipeServerStream _namedPipe;
 		private FileWatcher _fileWatcher;
 		private FileHandler _fileHandler;
-		protected AutoResetEvent _commandEvent;
 		private AutoResetEvent _fileChangedQueuedEvent;
 		private readonly Queue<FileChangedDataObject> _queue;
 		protected readonly CancellationTokenSource _cancellationTokenSource;
@@ -25,7 +26,6 @@ namespace DropboxEncryptor
 
 		protected Server()
 		{
-			_commandEvent = new AutoResetEvent(false);
 			_fileChangedQueuedEvent = new AutoResetEvent(false);
 			_queue = new Queue<FileChangedDataObject>();
 			_cancellationTokenSource = new CancellationTokenSource();
@@ -51,18 +51,17 @@ namespace DropboxEncryptor
 			{
 				OnDisposing();
 
+				_fileChangedQueuedEvent?.Dispose();
+				_cancellationTokenSource.Dispose();
+
 				_fileHandler?.Dispose();
 				_fileWatcher?.Dispose();
 				_namedPipe?.Dispose();
-				_commandEvent?.Dispose();
-				_fileChangedQueuedEvent?.Dispose();
-				_cancellationTokenSource.Dispose();
 			}
 
 			_namedPipe = null;
 			_fileWatcher = null;
 			_fileHandler = null;
-			_commandEvent = null;
 			_fileChangedQueuedEvent = null;
 		}
 		#endregion
@@ -72,8 +71,9 @@ namespace DropboxEncryptor
 			_namedPipe = new NamedPipeServerStream(NamedPipeName);
 			SetupKeyProviders();
 
-			_fileWatcher = new FileWatcher();
-			_fileHandler = new FileHandler();
+			var fileState = new FileState();
+			_fileWatcher = new FileWatcher(fileState);
+			_fileHandler = new FileHandler(fileState);
 			_fileWatcher.EnableEvents();
 			OnSetupComplete();
 		}
@@ -107,33 +107,32 @@ namespace DropboxEncryptor
 
 			var waitHandles = new List<WaitHandle> {
 				_fileChangedQueuedEvent,
-				_commandEvent,
 				_cancellationToken.WaitHandle
 			};
 
-			while (!exiting || _queue.Count > 0)
+			var queueCount = 0;
+			WaitHandle waitingForConnectionWaitHandle = null;
+			while (!exiting ||queueCount > 0)
 			{
-				_namedPipe.BeginWaitForConnection(ar =>
+				if (!exiting && waitingForConnectionWaitHandle == null)
 				{
-					_namedPipe.EndWaitForConnection(ar);
-					_commandEvent.Set();
-				}, null);
+					var result = _namedPipe.BeginWaitForConnection(ar =>
+					{
+						_namedPipe.EndWaitForConnection(ar);
+					}, null);
 
-				switch (_queue.Count > 0 ? 0 : WaitHandle.WaitAny(waitHandles.ToArray()))
+					waitingForConnectionWaitHandle = result.AsyncWaitHandle;
+					waitHandles.Add(waitingForConnectionWaitHandle);
+				}
+
+				switch (queueCount > 0 ? 0 : WaitHandle.WaitAny(waitHandles.ToArray()))
 				{
 					case 0: // _eventQueuedWaitHandle
 					{
 						ProcessFileChangedQueuedEvent();
 						break;
 					}
-					case 1: // _commandEvent
-					{
-						var commandResult = ProcessCommand();
-						if (commandResult == 0)
-							return commandResult;
-						break;
-					}
-					case 2: // _cancellationToken
+					case 1: // _cancellationToken
 					{
 						// Thread cancelled - process remaining events in queue
 						Console.WriteLine(
@@ -142,12 +141,28 @@ namespace DropboxEncryptor
 							$"*** [{Thread.CurrentThread.ManagedThreadId}]: Detected cancellation ***");
 						exiting = true;
 						waitHandles.Remove(_cancellationToken.WaitHandle);
-						waitHandles.Remove(_commandEvent);
+						break;
+					}
+					case 2: // waitingForConnectionWaitHandle
+					{
+						waitHandles.Remove(waitingForConnectionWaitHandle);
+						waitingForConnectionWaitHandle?.Dispose();
+						waitingForConnectionWaitHandle = null;
+
+						var commandResult = ProcessCommand();
+						if (commandResult == 0)
+							return commandResult;
 						break;
 					}
 				}
+
+				lock (_queue)
+				{
+					queueCount = _queue.Count;
+				}
 			}
 
+			waitingForConnectionWaitHandle?.Dispose();
 			return 0;
 		}
 

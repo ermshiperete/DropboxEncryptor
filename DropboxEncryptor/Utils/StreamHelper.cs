@@ -4,11 +4,11 @@ using System.IO;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.Text;
 
-namespace DropboxEncryptor
+namespace DropboxEncryptor.Utils
 {
 	public class StreamHelper
 	{
-		private readonly Stream          _ioStream;
+		private readonly Stream _ioStream;
 		private readonly UnicodeEncoding _streamEncoding;
 
 		public StreamHelper(Stream ioStream)

@@ -14,7 +14,7 @@ namespace DropboxEncryptorTests
 	[TestFixture(TestOf = typeof(FileHandler))]
 	public class FileHandlerWatcherTests
 	{
-		private const int TestInterval = 500;
+		private const int TestInterval = 1000;
 
 		public enum EncryptionDirection
 		{
@@ -88,7 +88,7 @@ namespace DropboxEncryptorTests
 
 				Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: Starting to wait");
 				Debug.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: Starting to wait");
-				_serverLoop.Wait(10 * TestInterval);
+				_serverLoop.Wait(TestInterval * TestInterval);
 
 				Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: End of OnDisposing");
 				Debug.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: End of OnDisposing");
@@ -126,7 +126,7 @@ namespace DropboxEncryptorTests
 			{
 				Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}] Start of WaitUntilServerProcessedChange");
 				Debug.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}] Start of WaitUntilServerProcessedChange");
-				_serverReadyEvent.WaitOne(TestInterval);
+				_serverReadyEvent.WaitOne();
 				Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}] End of WaitUntilServerProcessedChange");
 				Debug.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}] End of WaitUntilServerProcessedChange");
 			}
@@ -181,6 +181,7 @@ namespace DropboxEncryptorTests
 
 		[Test]
 		[Combinatorial]
+		[MaxTime(20000)]
 		public void NewFileGetsAdded(
 			[Values(Decrypted, Encrypted)] EncryptionDirection encrypted,
 			[Values("A.txt", "B.bla.txt", "C", "D.enc")] string fileName)
@@ -224,6 +225,7 @@ namespace DropboxEncryptorTests
 
 		[TestCase(Encrypted)]
 		[TestCase(Decrypted)]
+		[MaxTime(20000)]
 		public void RenamedFileGetsRenamed(EncryptionDirection encrypted)
 		{
 			WriteFile(encrypted);
@@ -271,7 +273,7 @@ namespace DropboxEncryptorTests
 		{
 			// Setup
 			WriteFile(encrypted);
-			var processFiles = new FileHandler();
+			var processFiles = new FileHandler(new FileState());
 
 			File.Delete(FileName(encrypted));
 

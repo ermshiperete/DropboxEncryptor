@@ -1,6 +1,6 @@
-﻿using System.Security;
+using System.Security;
 
-namespace DropboxEncryptor
+namespace DropboxEncryptor.Interfaces
 {
 	public interface IPasswordProvider
 	{
