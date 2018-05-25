@@ -97,7 +97,7 @@ namespace DropboxEncryptorTests
 			File.WriteAllText(testFile, "Delete file test");
 			RunCommand("git", "init .");
 			RunCommand("git", "add A.txt");
-			RunCommand("git", "commit -m \"Add A.txt\"");
+			RunCommand("git", "commit --no-gpg-sign -m \"Add A.txt\"");
 
 			// SUT
 			Backup.CreateBackup(new FileChangedDataObject(WatcherChangeTypes.Deleted, _tmpDir, "A.txt"));

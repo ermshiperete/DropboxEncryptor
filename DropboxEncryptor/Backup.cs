@@ -56,13 +56,13 @@ namespace DropboxEncryptor
 						RunCommand("git", $"add {dataObject.Name}");
 						break;
 					case WatcherChangeTypes.Deleted:
-						RunCommand("git", $"rm {dataObject.Name}");
+						RunCommand("git", $"rm -f {dataObject.Name}");
 						break;
 					case WatcherChangeTypes.Renamed:
 						RunCommand("git", $"mv {dataObject.OldName} {dataObject.Name}");
 						break;
 				}
-				RunCommand("git", $"commit -m \"{dataObject.ChangeType} {dataObject.FullPath}\"");
+				RunCommand("git", $"commit --no-gpg-sign -m \"{dataObject.ChangeType} {dataObject.FullPath}\"");
 			}
 			catch (Exception e)
 			{
