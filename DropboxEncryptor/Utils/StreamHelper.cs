@@ -19,31 +19,21 @@ namespace DropboxEncryptor.Utils
 
 		private byte[] ReadBytes(out int len)
 		{
-			len = 1;
-			try
+			len = _ioStream.ReadByte() * 256;
+			len += _ioStream.ReadByte();
+			if (len < 0)
 			{
-				len = _ioStream.ReadByte() * 256;
-				len += _ioStream.ReadByte();
-				if (len < 0)
-				{
-					Console.WriteLine("End of pipe stream!");
-					Debug.WriteLine("End of pipe stream!");
-					throw new EndOfStreamException();
-				}
+				Console.WriteLine("End of pipe stream!");
+				Debug.WriteLine("End of pipe stream!");
+				throw new EndOfStreamException();
+			}
 
-				Console.WriteLine($"Trying to read 2 + {len} bytes from named pipe");
-				Debug.WriteLine($"Trying to read 2 + {len} bytes from named pipe");
-				var inBuffer = new byte[len];
-				len = _ioStream.Read(inBuffer, 0, len);
-				//Console.WriteLine($"Actually read {len} bytes from named pipe");
-				return inBuffer;
-			}
-			catch (OverflowException e)
-			{
-				Console.WriteLine($"Got OverflowException; Trying to create buffer of {len} bytes");
-				Debug.WriteLine($"Got OverflowException; Trying to create buffer of {len} bytes");
-				return new byte[1];
-			}
+			Console.WriteLine($"Trying to read 2 + {len} bytes from named pipe");
+			Debug.WriteLine($"Trying to read 2 + {len} bytes from named pipe");
+			var inBuffer = new byte[len];
+			len = _ioStream.Read(inBuffer, 0, len);
+			//Console.WriteLine($"Actually read {len} bytes from named pipe");
+			return inBuffer;
 		}
 
 		public string ReadString()

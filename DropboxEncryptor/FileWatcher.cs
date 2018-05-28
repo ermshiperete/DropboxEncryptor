@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Pipes;
+using System.Linq;
 using System.Threading;
 
 namespace DropboxEncryptor
@@ -83,8 +84,8 @@ namespace DropboxEncryptor
 
 		private void OnEncryptedChanged(object sender, FileSystemEventArgs e)
 		{
-			Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: OnEncryptedChanged for {e.FullPath}");
-			Debug.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: OnEncryptedChanged for {e.FullPath}");
+			Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: OnEncryptedChanged ({e.ChangeType}) for {e.FullPath}");
+			Debug.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: OnEncryptedChanged ({e.ChangeType}) for {e.FullPath}");
 			if (!FileState.IsSpecialFile(e.FullPath) && NeedProcessing(e, true))
 				Enqueue(new FileChangedDataObject(Commands.EncryptedFileChangedCmd, e));
 			else
@@ -96,8 +97,8 @@ namespace DropboxEncryptor
 
 		private void OnDecryptedChanged(object sender, FileSystemEventArgs e)
 		{
-			Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: OnDecryptedChanged for {e.FullPath}");
-			Debug.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: OnDecryptedChanged for {e.FullPath}");
+			Console.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: OnDecryptedChanged ({e.ChangeType}) for {e.FullPath}");
+			Debug.WriteLine($"*** [{Thread.CurrentThread.ManagedThreadId}]: OnDecryptedChanged ({e.ChangeType}) for {e.FullPath}");
 			if (!FileState.IsSpecialFile(e.FullPath) && NeedProcessing(e, false))
 				Enqueue(new FileChangedDataObject(Commands.DecryptedFileChangedCmd, e));
 			else
@@ -115,12 +116,25 @@ namespace DropboxEncryptor
 			return _fileState.NeedProcessing(e.FullPath, fileIsEncrypted);
 		}
 
+		private int count;
 		private void Enqueue(FileChangedDataObject dataObject)
 		{
 			lock (Server.Queue)
 			{
+				var lastDataObject = Server.Queue.LastOrDefault();
+				if (dataObject.Equals(lastDataObject))
+					return;
+
 				Server.Queue.Enqueue(dataObject);
 				Server.FileChangeQueuedFileChangedQueuedEvent.Set();
+				var no = count++;
+				var qcnt = 0;
+				File.AppendAllText("/tmp/queue.txt", $"Content of queue after Enqueue {no} ({dataObject})\n");
+				foreach (var o in Server.Queue.ToArray())
+				{
+					File.AppendAllText("/tmp/queue.txt", $"\t{no}-{qcnt++}: {o}\n");
+				}
+				File.AppendAllText("/tmp/queue.txt", $"End of queue {no}\n");
 			}
 		}
 

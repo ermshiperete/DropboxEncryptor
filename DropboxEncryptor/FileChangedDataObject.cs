@@ -6,6 +6,7 @@ namespace DropboxEncryptor
 	[Serializable]
 	public class FileChangedDataObject
 	{
+		// ReSharper disable once MemberCanBePrivate.Global
 		public FileChangedDataObject()
 		{
 		}
@@ -29,12 +30,36 @@ namespace DropboxEncryptor
 			OldFullPath = renameEventArgs?.OldFullPath;
 		}
 
-		public string Command { get; set; }
-		public WatcherChangeTypes ChangeType { get; set; }
-		public string FullPath { get; set; }
-		public string OldFullPath { get; set; }
+		public string Command { get; }
+		public WatcherChangeTypes ChangeType { get; }
+		public string FullPath { get; }
+		public string OldFullPath { get; }
 
 		public string Name => Path.GetFileName(FullPath);
 		public string OldName => Path.GetFileName(OldFullPath);
+
+		public override bool Equals(object obj)
+		{
+			if (!(obj is FileChangedDataObject other))
+				return false;
+
+			return Command == other.Command &&
+				ChangeType == other.ChangeType &&
+				FullPath == other.FullPath &&
+				OldFullPath == other.OldFullPath;
+		}
+
+		public override int GetHashCode()
+		{
+			return Command.GetHashCode() ^ (int)ChangeType ^
+				FullPath.GetHashCode() ^ OldFullPath.GetHashCode();
+		}
+
+		public override string ToString()
+		{
+			return string.IsNullOrEmpty(OldFullPath)
+				? $"[{Command}] {ChangeType} {FullPath}"
+				: $"[{Command}] {ChangeType} {FullPath} from {OldFullPath}";
+		}
 	}
 }
